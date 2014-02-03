@@ -9,16 +9,17 @@ import (
 )
 
 type selectData struct {
-	RunWith     Runner
-	Distinct    bool
-	Columns     []string
-	From        string
-	WhereParts  []wherePart
-	GroupBys    []string
-	HavingParts []wherePart
-	OrderBys    []string
-	Limit       string
-	Offset      string
+	PlaceholderFormat placeholderFormat
+	RunWith           Runner
+	Distinct          bool
+	Columns           []string
+	From              string
+	WhereParts        []wherePart
+	GroupBys          []string
+	HavingParts       []wherePart
+	OrderBys          []string
+	Limit             string
+	Offset            string
 }
 
 // RunnerNotSet is returned by methods that use RunWith if it isn't set.
@@ -51,6 +52,8 @@ func (d *selectData) ToSql() (sqlStr string, args []interface{}, err error) {
 		return
 	}
 
+	placeholder := d.PlaceholderFormat.String()
+
 	var sql bytes.Buffer
 
 	sql.WriteString("SELECT ")
@@ -70,7 +73,7 @@ func (d *selectData) ToSql() (sqlStr string, args []interface{}, err error) {
 		sql.WriteString(" WHERE ")
 		var whereSql string
 		var whereArgs []interface{}
-		whereSql, whereArgs, err = wherePartsToSql(d.WhereParts)
+		whereSql, whereArgs, err = wherePartsToSql(d.WhereParts, placeholder)
 		sql.WriteString(whereSql)
 		args = append(args, whereArgs...)
 	}
@@ -84,7 +87,7 @@ func (d *selectData) ToSql() (sqlStr string, args []interface{}, err error) {
 		sql.WriteString(" HAVING ")
 		var havingSql string
 		var havingArgs []interface{}
-		havingSql, havingArgs, err = wherePartsToSql(d.HavingParts)
+		havingSql, havingArgs, err = wherePartsToSql(d.HavingParts, placeholder)
 		sql.WriteString(havingSql)
 		args = append(args, havingArgs...)
 	}
@@ -103,8 +106,7 @@ func (d *selectData) ToSql() (sqlStr string, args []interface{}, err error) {
 		sql.WriteString(" OFFSET ")
 		sql.WriteString(d.Offset)
 	}
-
-	sqlStr = sql.String()
+	sqlStr = d.PlaceholderFormat.ReplacePlaceholders(sql.String())
 	return
 }
 
@@ -115,6 +117,14 @@ type SelectBuilder builder.Builder
 
 func init() {
 	builder.Register(SelectBuilder{}, selectData{})
+}
+
+// Format methods
+
+// PlaceholderFormat sets the placeholder format (e.g. Question or Dollar) for
+// the query.
+func (b SelectBuilder) PlaceholderFormat(f placeholderFormat) SelectBuilder {
+	return builder.Set(b, "PlaceholderFormat", f).(SelectBuilder)
 }
 
 // Runner methods

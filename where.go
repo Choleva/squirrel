@@ -20,11 +20,11 @@ func newWherePart(pred interface{}, args ...interface{}) wherePart {
 	return wherePart{pred: pred, args: args}
 }
 
-func wherePartsToSql(parts []wherePart) (string, []interface{}, error) {
+func wherePartsToSql(parts []wherePart, placeholder string) (string, []interface{}, error) {
 	sqls := make([]string, 0, len(parts))
 	var args []interface{}
 	for _, part := range parts {
-		partSql, partArgs, err := part.ToSql()
+		partSql, partArgs, err := part.ToSql(placeholder)
 		if err != nil {
 			return "", []interface{}{}, err
 		}
@@ -36,14 +36,14 @@ func wherePartsToSql(parts []wherePart) (string, []interface{}, error) {
 	return strings.Join(sqls, " AND "), args, nil
 }
 
-func (p wherePart) ToSql() (sql string, args []interface{}, err error) {
+func (p wherePart) ToSql(placeholder string) (sql string, args []interface{}, err error) {
 	switch pred := p.pred.(type) {
 	case nil:
 		// no-op
 	case Eq:
-		return whereEqMap(map[string]interface{}(pred))
+		return whereEqMap(map[string]interface{}(pred), placeholder)
 	case map[string]interface{}:
-		return whereEqMap(pred)
+		return whereEqMap(pred, placeholder)
 	case string:
 		sql = pred
 		args = p.args
@@ -53,7 +53,7 @@ func (p wherePart) ToSql() (sql string, args []interface{}, err error) {
 	return
 }
 
-func whereEqMap(m map[string]interface{}) (sql string, args []interface{}, err error) {
+func whereEqMap(m map[string]interface{}, placeholder string) (sql string, args []interface{}, err error) {
 	var exprs []string
 	for key, val := range m {
 		expr := ""
@@ -64,13 +64,13 @@ func whereEqMap(m map[string]interface{}) (sql string, args []interface{}, err e
 			if valVal.Kind() == reflect.Array || valVal.Kind() == reflect.Slice {
 				placeholders := make([]string, valVal.Len())
 				for i := 0; i < valVal.Len(); i++ {
-					placeholders[i] = "?"
+					placeholders[i] = placeholder
 					args = append(args, valVal.Index(i).Interface())
 				}
 				placeholdersStr := strings.Join(placeholders, ",")
 				expr = fmt.Sprintf("%s IN (%s)", key, placeholdersStr)
 			} else {
-				expr = fmt.Sprintf("%s = ?", key)
+				expr = fmt.Sprintf("%s = %s", key, placeholder)
 				args = append(args, val)
 			}
 		}
